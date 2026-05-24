@@ -1,8 +1,3 @@
-/**
- * doubao-ws-proxy — Node.js WebSocket 代理
- * 部署到 Render.com (免费)
- */
-
 const http = require('http');
 const { WebSocket, WebSocketServer } = require('ws');
 
@@ -28,23 +23,29 @@ wss.on('connection', (clientWs, req) => {
   }
 
   const connectId = require('crypto').randomUUID();
-  const volcUrl = new URL('wss://openspeech.bytedance.com/api/v3/realtime/dialogue');
-  volcUrl.searchParams.set('X-Api-App-ID',      DOUBAO_APP_ID);
-  volcUrl.searchParams.set('X-Api-Access-Key',  DOUBAO_ACCESS_KEY);
-  volcUrl.searchParams.set('X-Api-Resource-Id', 'volc.speech.dialog');
-  volcUrl.searchParams.set('X-Api-App-Key',     APP_KEY);
-  volcUrl.searchParams.set('X-Api-Connect-Id',  connectId);
 
-  const volcWs = new WebSocket(volcUrl.toString());
+  // 火山要求通过 Request Headers 鉴权，不支持 query string
+  const volcWs = new WebSocket(
+    'wss://openspeech.bytedance.com/api/v3/realtime/dialogue',
+    {
+      headers: {
+        'X-Api-App-ID':      DOUBAO_APP_ID,
+        'X-Api-Access-Key':  DOUBAO_ACCESS_KEY,
+        'X-Api-Resource-Id': 'volc.speech.dialog',
+        'X-Api-App-Key':     APP_KEY,
+        'X-Api-Connect-Id':  connectId,
+      }
+    }
+  );
 
-  volcWs.on('open', () => console.log('[proxy] 火山连接成功'));
+  volcWs.on('open', () => console.log('[proxy] 火山连接成功 connectId=' + connectId));
 
   volcWs.on('message', (data) => {
     if (clientWs.readyState === WebSocket.OPEN) clientWs.send(data);
   });
 
   volcWs.on('close', (code, reason) => {
-    console.log('[proxy] 火山断开 code=' + code);
+    console.log('[proxy] 火山断开 code=' + code + ' reason=' + reason);
     try { clientWs.close(code || 1000, reason?.toString() || ''); } catch (_) {}
   });
 
