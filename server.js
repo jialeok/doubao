@@ -2,7 +2,9 @@ const http = require('http');
 const { WebSocket, WebSocketServer } = require('ws');
 
 const PORT = process.env.PORT || 3000;
-const DOUBAO_API_KEY = process.env.DOUBAO_API_KEY;
+const DOUBAO_APP_ID     = process.env.DOUBAO_APP_ID;
+const DOUBAO_ACCESS_KEY = process.env.DOUBAO_ACCESS_KEY;
+const APP_KEY           = 'PlgvMymc7f3tQnJ6'; // 固定值，来自火山文档
 
 const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -14,21 +16,24 @@ const wss = new WebSocketServer({ server, path: '/proxy' });
 wss.on('connection', (clientWs, req) => {
   console.log('[proxy] client connected');
 
-  if (!DOUBAO_API_KEY) {
-    console.error('[proxy] 缺少环境变量 DOUBAO_API_KEY');
+  if (!DOUBAO_APP_ID || !DOUBAO_ACCESS_KEY) {
+    console.error('[proxy] 缺少环境变量 DOUBAO_APP_ID 或 DOUBAO_ACCESS_KEY');
     clientWs.close(1011, 'server misconfigured');
     return;
   }
 
   const connectId = require('crypto').randomUUID();
 
-  // 新版 API Key 鉴权方式
+  // 旧版鉴权方式（豆包端到端实时语音API文档要求）
   const volcWs = new WebSocket(
     'wss://openspeech.bytedance.com/api/v3/realtime/dialogue',
     {
       headers: {
-        'Authorization':    'Bearer ' + DOUBAO_API_KEY,
-        'X-Api-Connect-Id': connectId,
+        'X-Api-App-ID':      DOUBAO_APP_ID,
+        'X-Api-Access-Key':  DOUBAO_ACCESS_KEY,
+        'X-Api-Resource-Id': 'volc.speech.dialog',
+        'X-Api-App-Key':     APP_KEY,
+        'X-Api-Connect-Id':  connectId,
       }
     }
   );
