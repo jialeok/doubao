@@ -11,7 +11,16 @@ const server = http.createServer((req, res) => {
   res.end('doubao-ws-proxy ok');
 });
 
-const wss = new WebSocketServer({ server, path: '/proxy' });
+// 禁用 perMessageDeflate，避免压缩干扰火山二进制协议
+const wss = new WebSocketServer({ server, path: '/proxy', perMessageDeflate: false });
+
+// 把 ws data 统一转成 Buffer（防止 Buffer[] 数组情况）
+function toBuffer(data) {
+  if (Buffer.isBuffer(data)) return data;
+  if (data instanceof ArrayBuffer) return Buffer.from(data);
+  if (Array.isArray(data)) return Buffer.concat(data.map(toBuffer));
+  return Buffer.from(data);
+}
 
 wss.on('connection', (clientWs, req) => {
   console.log('[proxy] client connected');
@@ -31,6 +40,7 @@ wss.on('connection', (clientWs, req) => {
   const volcWs = new WebSocket(
     'wss://openspeech.bytedance.com/api/v3/realtime/dialogue',
     {
+      perMessageDeflate: false,   // ← 关键：禁用压缩，火山二进制协议不支持
       headers: {
         'X-Api-App-ID':      DOUBAO_APP_ID,
         'X-Api-Access-Key':  DOUBAO_ACCESS_KEY,
@@ -45,18 +55,20 @@ wss.on('connection', (clientWs, req) => {
     console.log('[proxy] 火山连接成功 connectId=' + connectId);
     volcReady = true;
     // 把缓冲的帧全部发给火山
-    pendingFrames.forEach(({ data, isBinary }) => {
-      volcWs.send(data, { binary: isBinary });
-      console.log('[proxy] 发送缓冲帧 binary=' + isBinary + ' len=' + (data.length || data.byteLength));
+    pendingFrames.forEach(({ data }) => {
+      const buf = toBuffer(data);
+      volcWs.send(buf, { binary: true });
+      console.log('[proxy] 发送缓冲帧 len=' + buf.length);
     });
     pendingFrames.length = 0;
   });
 
-  // 火山 → 客户端
+  // 火山 → 客户端（原样转发 Buffer）
   volcWs.on('message', (data, isBinary) => {
     if (clientWs.readyState === WebSocket.OPEN) {
-      clientWs.send(data, { binary: isBinary });
-      console.log('[proxy] 火山→客户端 binary=' + isBinary + ' len=' + (data.length || data.byteLength));
+      const buf = toBuffer(data);
+      clientWs.send(buf, { binary: true });
+      console.log('[proxy] 火山→客户端 len=' + buf.length);
     }
   });
 
@@ -70,15 +82,15 @@ wss.on('connection', (clientWs, req) => {
     try { clientWs.close(1011, err.message); } catch (_) {}
   });
 
-  // 客户端 → 火山
+  // 客户端 → 火山（统一转 Buffer 再发）
   clientWs.on('message', (data, isBinary) => {
+    const buf = toBuffer(data);
+    console.log('[proxy] 客户端→火山 len=' + buf.length + ' 前16字节:[' + Array.from(buf.slice(0,16)).join(' ') + ']');
     if (volcReady && volcWs.readyState === WebSocket.OPEN) {
-      volcWs.send(data, { binary: isBinary });
-      console.log('[proxy] 客户端→火山 binary=' + isBinary + ' len=' + (data.length || data.byteLength));
+      volcWs.send(buf, { binary: true });
     } else {
-      // 火山还没 ready，先缓冲
-      pendingFrames.push({ data, isBinary });
-      console.log('[proxy] 缓冲帧 len=' + (data.length || data.byteLength));
+      pendingFrames.push({ data: buf });
+      console.log('[proxy] 缓冲帧 len=' + buf.length);
     }
   });
 
