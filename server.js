@@ -3,8 +3,8 @@ const { WebSocket, WebSocketServer } = require('ws');
 
 const PORT = process.env.PORT || 3000;
 const DOUBAO_APP_ID     = process.env.DOUBAO_APP_ID;
-const DOUBAO_ACCESS_KEY = process.env.DOUBAO_API_KEY;
-const APP_KEY           = process.env.DOUBAO_APP_KEY;
+const DOUBAO_ACCESS_KEY = process.env.DOUBAO_ACCESS_KEY;
+const APP_KEY           = 'PlgvMymc7f3tQnJ6';
 
 const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -25,7 +25,7 @@ function toBuffer(data) {
 wss.on('connection', (clientWs, req) => {
   console.log('[proxy] client connected');
 
-  if (!DOUBAO_APP_ID || !DOUBAO_ACCESS_KEY || !APP_KEY) {
+  if (!DOUBAO_APP_ID || !DOUBAO_ACCESS_KEY) {
     console.error('[proxy] 缺少环境变量');
     clientWs.close(1011, 'server misconfigured');
     return;
